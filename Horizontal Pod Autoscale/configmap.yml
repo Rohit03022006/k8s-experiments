@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: react-django-app-config-map
+  namespace: react-django-app-demo
+
+data:
+  database: react-django-app-demo
