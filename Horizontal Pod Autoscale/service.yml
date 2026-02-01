@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: react-django-app-service
+  namespace: react-django-app-demo
+
+spec:
+  selector:
+    app: react-django-app
+
+  ports:
+    - protocol: TCP
+      port: 80        # service port
+      targetPort: 8000 # Django container port
+
+  type: ClusterIP

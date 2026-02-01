@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: react-django-app
+  namespace: react-django-app-demo
+  labels:
+    app: react-django-app
+
+spec:
+  replicas: 1  # number of pod replicas
+  selector:
+    matchLabels:
+      app: react-django-app
+
+  template:
+    metadata:
+      labels:
+        app: react-django-app
+
+    spec:
+      containers:
+        - name: react-django-app
+          image: rohitxten/react-django-app
+          ports:
+            - containerPort: 8000  # Django runs on 8000
+          env:
+            - name: DB_HOST
+              value: localhost  # MySQL is in same pod
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: react-django-app-config-map
+                  key: database
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: react-django-app-config-map
+                  key: database
+          volumeMounts:
+            - name: react-django-app-data
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: react-django-app-data
+          persistentVolumeClaim:
+            claimName: react-django-app-pvc
