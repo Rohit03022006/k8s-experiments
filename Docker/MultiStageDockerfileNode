@@ -1,0 +1,36 @@
+# Stage 1: Build 
+FROM node:20-alpine AS builder 
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm install
+
+# Copy source
+COPY . .
+
+RUN npm run build 
+
+
+# Stage 2: Production 
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Only copy necessary files from builder
+COPY --from=builder /app/package*.json ./
+RUN npm install --production
+
+# Copy built app or source
+COPY --from=builder /app/dist ./dist 
+COPY --from=builder /app/server.js ./server.js 
+
+# Volume for persistent data/logs
+VOLUME ["/app/data"]
+
+# Expose app port
+EXPOSE 3000
+
+# Run app
+CMD ["node", "server.js"]
