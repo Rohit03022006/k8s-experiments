@@ -1,0 +1,60 @@
+namespace: prod
+
+frontend:
+  replicaCount: 3
+  image:
+    repository: myregistry/microservice-frontend
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 75
+  pdb:
+    minAvailable: 2
+
+backend:
+  replicaCount: 3
+  image:
+    repository: myregistry/microservice-backend
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  env:
+    DB_HOST: "mysql.prod.svc.cluster.local" # Adjust if dynamic
+    REDIS_HOST: "redis.prod.svc.cluster.local" # Adjust if dynamic
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  pdb:
+    minAvailable: 2
+
+mysql:
+  image:
+    repository: microdb-seed
+    tag: "latest"
+  persistence:
+    size: 10Gi
+
+ingress:
+  enabled: true
+  className: "nginx"
+  host: myapp.k8s.local
+  tls:
+    - secretName: myapp-tls-secret
+      hosts:
+        - myapp.k8s.local

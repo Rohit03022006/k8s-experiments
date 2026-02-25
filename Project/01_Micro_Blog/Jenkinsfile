@@ -1,0 +1,89 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_CREDS = 'dockerhub-creds'
+        FRONTEND_IMAGE = "myrepo/microservice-frontend:${env.BUILD_ID}"
+        BACKEND_IMAGE = "myrepo/microservice-backend:${env.BUILD_ID}"
+        KUBECONFIG_CREDENTIALS_ID = 'kubernetes-kubeconfig'
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        disableConcurrentBuilds()
+    }
+
+    stages {
+        stage('Static Code Analysis (SonarQube)') {
+            steps {
+                script {
+                    echo "Running SonarQube Static Code Analysis..."
+                    // Requires 'sonar-server' configured in Manage Jenkins -> System
+                    // Requires 'sonar-scanner' configured in Global Tool Configuration
+                    try {
+                        def scannerHome = tool 'sonar-scanner'
+                        withSonarQubeEnv('sonar-server') {
+                            sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=microblog -Dsonar.sources=./frontend/src,./backend/src -Dsonar.exclusions=**/node_modules/**,**/dist/**"
+                        }
+                    } catch (Exception e) {
+                        echo "SonarQube step failed or not fully configured: ${e.message}"
+                        echo "Please ensure 'sonar-scanner' tool and 'sonar-server' env are configured in Jenkins."
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                script {
+                    echo "Building Frontend Image..."
+                    sh "docker build -t ${FRONTEND_IMAGE} ./frontend"
+                    
+                    echo "Building Backend Image..."
+                    sh "docker build -t ${BACKEND_IMAGE} ./backend"
+                }
+            }
+        }
+
+        stage('Security Scanning (Trivy)') {
+            steps {
+                script {
+                    echo "Scanning images for HIGH and CRITICAL vulnerabilities..."
+                    sh "trivy image --severity HIGH,CRITICAL --exit-code 1 ${FRONTEND_IMAGE}"
+                    sh "trivy image --severity HIGH,CRITICAL --exit-code 1 ${BACKEND_IMAGE}"
+                }
+            }
+        }
+
+        stage('Push to Registry') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: DOCKER_CREDS, passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                    sh "docker push ${FRONTEND_IMAGE}"
+                    sh "docker push ${BACKEND_IMAGE}"
+                }
+            }
+        }
+
+        stage('Deploy via Helm') {
+            steps {
+                withCredentials([file(credentialsId: KUBECONFIG_CREDENTIALS_ID, variable: 'KUBECONFIG')]) {
+                    sh """
+                    helm upgrade --install microapp ./helm/microapp -n prod --create-namespace \
+                        -f ./helm/microapp/values.yaml \
+                        --set frontend.image.repository=myrepo/microservice-frontend \
+                        --set frontend.image.tag=${env.BUILD_ID} \
+                        --set backend.image.repository=myrepo/microservice-backend \
+                        --set backend.image.tag=${env.BUILD_ID}
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}

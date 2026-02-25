@@ -1,0 +1,73 @@
+# Default deny all ingress traffic in the prod namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: prod
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+---
+# Allow external traffic to frontend via Ingress Controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-frontend
+  namespace: prod
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx # Assuming ingress controller is here
+    ports:
+    - protocol: TCP
+      port: 80
+---
+# Allow frontend to communicate with backend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-backend
+  namespace: prod
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: frontend
+    # Also allow ingress controller for direct /api routing
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 3000
+---
+# Allow backend to communicate with Redis and MySQL
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-to-db-cache
+  namespace: prod
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app, operator: In, values: [mysql, redis]}
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: backend
+    ports:
+    - protocol: TCP
+      port: 3306
+    - protocol: TCP
+      port: 6379
