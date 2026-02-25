@@ -1,0 +1,6 @@
+apiVersion: v2
+name: microapp
+description: A Helm chart for a cloud-native React, Node.js, Redis, and MySQL application
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
